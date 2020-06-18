@@ -22,6 +22,8 @@ use pin_project_lite::pin_project;
 
 #[cfg(feature = "trust-dns")]
 use crate::dns::TrustDnsResolver;
+#[cfg(feature = "trust-dns")]
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
 use crate::proxy::{Proxy, ProxyScheme};
 use crate::error::BoxError;
 #[cfg(feature = "default-tls")]
@@ -42,8 +44,8 @@ impl HttpConnector {
     }
 
     #[cfg(feature = "trust-dns")]
-    pub(crate) fn new_trust_dns() -> crate::Result<HttpConnector> {
-        TrustDnsResolver::new()
+    pub(crate) fn new_trust_dns(config: Option<(ResolverConfig, ResolverOpts)>) -> crate::Result<HttpConnector> {
+        TrustDnsResolver::new(config)
             .map(hyper::client::HttpConnector::new_with_resolver)
             .map(Self::TrustDns)
             .map_err(crate::error::builder)

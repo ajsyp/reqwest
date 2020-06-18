@@ -98,6 +98,11 @@ struct Config {
     cookie_store: Option<cookie::CookieStore>,
     trust_dns: bool,
     error: Option<crate::Error>,
+    #[cfg(feature = "trust-dns")]
+    trust_dns_config: Option<(
+        trust_dns_resolver::config::ResolverConfig,
+        trust_dns_resolver::config::ResolverOpts,
+    )>,
 }
 
 impl Default for ClientBuilder {
@@ -146,6 +151,8 @@ impl ClientBuilder {
                 trust_dns: cfg!(feature = "trust-dns"),
                 #[cfg(feature = "cookies")]
                 cookie_store: None,
+                #[cfg(feature = "trust-dns")]
+                trust_dns_config: None,
             },
         }
     }
@@ -178,7 +185,7 @@ impl ClientBuilder {
             let http = match config.trust_dns {
                 false => HttpConnector::new_gai(),
                 #[cfg(feature = "trust-dns")]
-                true => HttpConnector::new_trust_dns()?,
+                true => HttpConnector::new_trust_dns(config.trust_dns_config)?,
                 #[cfg(not(feature = "trust-dns"))]
                 true => unreachable!("trust-dns shouldn't be enabled unless the feature is"),
             };
@@ -835,6 +842,21 @@ impl ClientBuilder {
     #[cfg(feature = "trust-dns")]
     pub fn trust_dns(mut self, enable: bool) -> ClientBuilder {
         self.config.trust_dns = enable;
+        self
+    }
+
+    /// Sets the configuration of the `trust-dns` async resolver.
+    ///
+    /// # Optional
+    ///
+    /// This requires the optional `trust-dns` feature to be enabled.
+    #[cfg(feature = "trust-dns")]
+    pub fn trust_dns_config(
+        mut self,
+        config: trust_dns_resolver::config::ResolverConfig,
+        options: trust_dns_resolver::config::ResolverOpts,
+    ) -> ClientBuilder {
+        self.config.trust_dns_config = Some((config, options));
         self
     }
 

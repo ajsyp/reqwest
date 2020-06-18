@@ -507,6 +507,20 @@ impl ClientBuilder {
         self.with_inner(|inner| inner.trust_dns(enable))
     }
 
+    /// Sets the configuration of the `trust-dns` async resolver.
+    ///
+    /// # Optional
+    ///
+    /// This requires the optional `trust-dns` feature to be enabled.
+    #[cfg(feature = "trust-dns")]
+    pub fn trust_dns_config(
+        self,
+        config: trust_dns_resolver::config::ResolverConfig,
+        options: trust_dns_resolver::config::ResolverOpts,
+    ) -> ClientBuilder {
+        self.with_inner(|inner| inner.trust_dns_config(config,options))
+    }
+
     /// Disables the trust-dns async resolver.
     ///
     /// This method exists even if the optional `trust-dns` feature is not enabled.

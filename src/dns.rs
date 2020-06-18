@@ -27,21 +27,23 @@ pub(crate) struct TrustDnsResolver {
 }
 
 enum State {
-    Init,
+    Init(Option<(ResolverConfig, ResolverOpts)>),
     Ready(SharedResolver),
 }
 
 impl TrustDnsResolver {
-    pub(crate) fn new() -> io::Result<Self> {
-        SYSTEM_CONF.as_ref().map_err(|e| {
-            io::Error::new(e.kind(), format!("error reading DNS system conf: {}", e))
-        })?;
+    pub(crate) fn new(config: Option<(ResolverConfig, ResolverOpts)>) -> io::Result<Self> {
+        if config.is_none() {
+            SYSTEM_CONF.as_ref().map_err(|e| {
+                io::Error::new(e.kind(), format!("error reading DNS system conf: {}", e))
+            })?;
+        }
 
         // At this stage, we might not have been called in the context of a
         // Tokio Runtime, so we must delay the actual construction of the
         // resolver.
         Ok(TrustDnsResolver {
-            state: Arc::new(Mutex::new(State::Init)),
+            state: Arc::new(Mutex::new(State::Init(config))),
         })
     }
 }
@@ -61,8 +63,9 @@ impl Service<hyper_dns::Name> for TrustDnsResolver {
             let mut lock = resolver.state.lock().await;
 
             let resolver = match &*lock {
-                State::Init => {
-                    let resolver = new_resolver(tokio::runtime::Handle::current()).await?;
+                State::Init(config) => {
+                    let resolver =
+                        new_resolver(tokio::runtime::Handle::current(), config.clone()).await?;
                     *lock = State::Ready(resolver.clone());
                     resolver
                 },
@@ -81,11 +84,17 @@ impl Service<hyper_dns::Name> for TrustDnsResolver {
 
 /// Takes a `Handle` argument as an indicator that it must be called from
 /// within the context of a Tokio runtime.
-async fn new_resolver(handle: tokio::runtime::Handle) -> Result<SharedResolver, BoxError> {
-    let (config, opts) = SYSTEM_CONF
-        .as_ref()
-        .expect("can't construct TrustDnsResolver if SYSTEM_CONF is error")
-        .clone();
+async fn new_resolver(
+    handle: tokio::runtime::Handle,
+    config: Option<(ResolverConfig, ResolverOpts)>,
+) -> Result<SharedResolver, BoxError> {
+    let (config, opts) = match config {
+        Some((config, opts)) => (config, opts),
+        None => SYSTEM_CONF
+            .as_ref()
+            .expect("can't construct TrustDnsResolver if SYSTEM_CONF is error")
+            .clone(),
+    };
     let resolver = AsyncResolver::new(config, opts, handle).await?;
     Ok(Arc::new(resolver))
 }
